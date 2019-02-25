@@ -4,6 +4,8 @@
 #include <Arduino.h>
 #include <avr/pgmspace.h>
 #include <cstddef>
+#include <cstdlib>
+#include <cstring>
 #include <stdint.h>
 #include <iterator>
 

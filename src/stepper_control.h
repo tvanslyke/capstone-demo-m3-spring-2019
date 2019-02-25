@@ -4,14 +4,14 @@
 
 namespace ino {
 
-int cmd_stepper(int argc, char** argv);
+int cmd_window(int argc, char** argv);
 
 template <>
 [[gnu::progmem]]
-inline constexpr auto command_traits<cmd_stepper> = ino::CommandTraits{
-	"stepper",
-	"stepper [position]",
-	"Get or set the stepper position with a value from 0 to 99."
+inline constexpr auto command_traits<cmd_window> = ino::CommandTraits{
+	"window",
+	"window [OPEN/CLOSE]",
+	"Get or set the window position."
 };
 
 } /* namespace ino */

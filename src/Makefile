@@ -8,7 +8,7 @@ CXXFLAGS=-mmcu=atmega328p -std=c++17 -Os -fmax-errors=5 -Wall -Wextra -DF_CPU=16
 #  -I/usr/share/arduino/hardware/arduino/variants/standard -I/usr/share/arduino/hardware/arduino/cores/arduino
 # -D$(DEVICE) 
 
-OBJECTS=main.o Command.o stepper_control.o
+OBJECTS=main.o Command.o stepper_control.o checkengine.o Pins.o
 
 firmware.elf: $(OBJECTS)
 	$(CXX) $(OBJECTS) ./../arduino/libarduino.a $(CXXFLAGS) -o firmware.elf
@@ -18,6 +18,12 @@ firmware.elf: $(OBJECTS)
 
 stepper_control.o: stepper_control.cpp stepper_control.h Command.h Stepper.h ./ArduinoSTL/src/*.h
 	$(CXX)  stepper_control.cpp $(CXXFLAGS) -c 
+
+checkengine.o: checkengine.cpp checkengine.h Command.h ./ArduinoSTL/src/*.h
+	$(CXX)  checkengine.cpp $(CXXFLAGS) -c 
+
+Pins.o: Pins.cpp Pins.h Command.h ino_assert.h Array.h ./ArduinoSTL/src/*.h
+	$(CXX)  Pins.cpp $(CXXFLAGS) -c 
 
 Command.o: Command.cpp Command.h ./ArduinoSTL/src/*.h IteratorRange.h Pins.h ino_assert.h
 	$(CXX)  Command.cpp $(CXXFLAGS) -c 

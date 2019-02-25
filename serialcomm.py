@@ -4,7 +4,7 @@ import threading
 import sys
 
 
-with serial.Serial(port='/dev/serial0', baudrate=115200, dsrdtr=False) as conn:
+with serial.Serial(port='/dev/ttyUSB0', baudrate=115200, dsrdtr=False) as conn:
 	def write_output():
 		try:
 			while conn.isOpen():

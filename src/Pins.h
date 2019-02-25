@@ -136,12 +136,14 @@ struct CheckedPin {
 		case A3: return 17;
 		case A4: return 18;
 		case A5: return 19;
+		case A6: return 19;
+		case A7: return 19;
 		}
 	}
 
 	[[gnu::warn_unused_result]]
 	constexpr bool is_valid() const {
-		return index() >= 0;
+		return index() >= 0 and index() <= A7;
 	}
 
 	void set_mode(PinMode mode) const {
@@ -232,9 +234,6 @@ private:
 	int8_t number_;
 };
 	
-std::bitset<20> CheckedPin::pinmodes_ = std::bitset<20>{};
-std::bitset<20> CheckedPin::is_pullup_ = std::bitset<20>{};
-
 inline constexpr auto all_pins = ino::Array{
 	CheckedPin::from_pin_number<0>(),
 	CheckedPin::from_pin_number<1>(),

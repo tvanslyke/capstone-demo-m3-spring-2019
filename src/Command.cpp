@@ -7,6 +7,7 @@
 #include <cstring>
 #include <algorithm>
 #include "stepper_control.h"
+#include "checkengine.h"
 
 namespace ino {
 struct Command {
@@ -210,29 +211,6 @@ static int cmd_analogread(int argc, char** argv) {
 	return 0;
 }
 
-static int cmd_ledon(int argc, char** argv) {
-	if(argc != 1) {
-		return command_error(F("Command 'ledon' takes no arguments."));
-	}
-	pin<13>.set_mode(PinMode::Output);
-	if(pin<13>.digital_write(LogicLevel::High) != PinStatus::Good) {
-		return command_error(F("Error while driving LED pin high."));
-	}
-	return 0;
-}
-
-static int cmd_ledoff(int argc, char** argv) {
-	if(argc != 1) {
-		return command_error(F("Command 'ledoff' takes no arguments."));
-	}
-	pin<13>.set_mode(PinMode::Output);
-	if(pin<13>.digital_write(LogicLevel::Low) != PinStatus::Good) {
-		return command_error(F("Error while driving LED pin high."));
-	}
-	return 0;
-}
-
-
 static int cmd_analogwrite(int argc, char** argv) {
 	const auto* pin = pincommand_check(argc, argv, 3);
 	if(not pin) {
@@ -269,7 +247,43 @@ static int cmd_analogwrite(int argc, char** argv) {
 	return 0;
 }
 
+static int cmd_headlights(int argc, char** argv) {
+	constexpr int8_t pin = 9;
+	pinMode(pin, OUTPUT);
+	switch(argc) {
+	default:
+		return command_error(F("Command 'headlights' takes at most 1 argument."));
+	case 2:
+		if(std::strcmp(argv[1], "ON") == 0 or std::strcmp(argv[1], "on") == 0) {
+			digitalWrite(pin, HIGH);
+		} else if(std::strcmp(argv[1], "OFF") or std::strcmp(argv[1], "off")) {
+			digitalWrite(pin, LOW);
+		} else {
+			return command_error(F("Expected one of 'on', 'ON', 'off', or 'OFF'."));
+		}
+		break;
+	case 1:
+		(void)0;
+	}
+	// Echo the current status of the pin.
+	if(digitalRead(9) == HIGH) {
+		Serial.println("ON");
+	} else {
+		Serial.println("OFF");
+	}
+	return 0;
+
+}
+
 static int cmd_help(int argc, char** argv);
+
+template <>
+[[gnu::progmem]]
+inline constexpr auto command_traits<cmd_headlights> = CommandTraits{
+	"headlights",
+	"headlights [ON/OFF]",
+	"Modify or query the state of the headlights."
+};
 
 template <>
 [[gnu::progmem]]
@@ -319,22 +333,6 @@ inline constexpr auto command_traits<cmd_analogwrite> = CommandTraits{
 	"Drive the given PWM pin with a pulse width in the range [0, 256)."
 };
 
-template <>
-[[gnu::progmem]]
-inline constexpr auto command_traits<cmd_ledon> = CommandTraits{
-	"ledon",
-	"ledon",
-	"Turn the pin 13 LED on."
-};
-
-template <>
-[[gnu::progmem]]
-inline constexpr auto command_traits<cmd_ledoff> = CommandTraits{
-	"ledoff",
-	"ledoff",
-	"Turn the pin 13 LED off."
-};
-
 [[gnu::progmem]]
 static constexpr auto command_table = ino::FlashArray{
 	command<cmd_help>,
@@ -343,7 +341,10 @@ static constexpr auto command_table = ino::FlashArray{
 	command<cmd_digitalwrite>,
 	command<cmd_analogread>,
 	command<cmd_analogwrite>,
-	command<cmd_stepper>
+	command<cmd_window>,
+	command<cmd_headlights>,
+	command<cmd_checkengine_status>,
+	command<cmd_checkengine_light>
 };
 
 static void print_left_justified(ino::FlashStringView<> s, std::size_t width) {

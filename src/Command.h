@@ -59,23 +59,19 @@ CommandTraits(const char (&)[X], const char (&)[Y], const char (&)[Z]) -> Comman
 template <int (*Cmd)(int, char**)>
 inline constexpr auto command_traits = ino::CommandTraits{"Name", "Usage", "Description"};
 
-template <class First, class ... Rest>
-[[nodiscard]]
-int command_error_helper(const First& first, const Rest& ... rest) {
-	if constexpr(sizeof...(Rest) == 0u) {
-		Serial.println(first);
-		return -1;
-	} else {
-		return command_error_helper(rest...);
-	}
-}
-
 template <class ... Args>
 [[nodiscard]]
 int command_error(const Args& ... args) {
 	Serial.print(F("Error: "));
 	(Serial.print(args) , ... , Serial.println());
 	return -1;
+}
+
+template <class ... Args>
+[[nodiscard]]
+int command_success(const Args& ... args) {
+	(Serial.print(args) , ... , Serial.println());
+	return 0;
 }
 
 int invoke_command(int argc, char** argv);
