@@ -4,7 +4,7 @@
 
 namespace ino {
 
-int cmd_window(int argc, char** argv);
+int cmd_window(Span<StringView<>>);
 
 template <>
 [[gnu::progmem]]

@@ -6,13 +6,11 @@
 
 namespace ino {
 
+// Helper class to allow FlashString and FlashStringView to work with Serial.print().
 template <class Char = char>
 struct PrintableFlashStringView;
 
-template <std::size_t N>
-struct FlashString;
-
-
+// std::string_view-like interface for a string stored in flash memory.
 template <class Char = char>
 struct FlashStringView {
 	using value_type 	     = Char;
@@ -30,9 +28,6 @@ struct FlashStringView {
 	static constexpr std::size_t npos = ~size_type(0);
 
 	constexpr FlashStringView() = default;
-
-	template <std::size_t N>
-	constexpr FlashStringView(const FlashString<N>& s);
 
 	constexpr FlashStringView(const Char* p, size_type sz):
 		data_(p), size_(sz)
@@ -199,6 +194,21 @@ using make_index_sequence = typename ino::detail::make_index_sequence_type<N>::t
 
 } /* namespace detail */
 
+
+/**
+ * @tparam N - Size of the stored string, not including the null terminator.
+ * @brief Wraps a char string stored in flash.
+ * 
+ * @note All member functions expect the FlashString object to be stored in flash memory.
+ *       It is an error to declare an instance of FlashString<N> in RAM.  All
+ *       declarations should be marked with PROGMEM or [[gnu::progmem]] to ensure
+ *       that it is stored in flash memory.
+ *       An exception to this rule is the case where FlashString is a class or struct data
+ *       member.  In this case, FlashString "poisons" the struct such that every instance of
+ *       the struct must be stored in flash memory.
+ * @note Unlike FlashString, FlashStringView may be stored in RAM because it only provides a
+ *       view of a FlashString instance.  
+ */
 template <std::size_t N>
 struct FlashString {
 	
@@ -324,22 +334,19 @@ public:
 		return {view()};
 	}
 
-
 private:
 	const char data_[N + 1u];
 };
 
+
+/* Deduction guide to deduce size of a FlashString from a string literal. */
 template <std::size_t N>
 FlashStringView(const FlashString<N>&) -> FlashStringView<char>;
  
+/* Deduction guide to deduce size of a FlashString from a string literal. */
 template <std::size_t N>
 FlashString(const char (&str)[N]) -> FlashString<N - 1u>;
 
-
-[[gnu::progmem]]
-inline constexpr auto empty_flash_string = ino::FlashString{""};
-
- 
 } /* namespace ino */
 
 #endif /* INO_FLASH_STRING_H */

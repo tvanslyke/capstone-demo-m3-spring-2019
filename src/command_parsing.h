@@ -6,57 +6,52 @@
 #include <iterator>
 #include <cstddef>
 #include "ino_assert.h"
+#include "StringView.h"
 
 namespace ino {
 
 [[nodiscard]]
-std::pair<char*, std::size_t> find_token(char* first, char* last) {
+ino::StringView<> find_token(ino::StringView<> str) {
+	constexpr auto whitespace = StringView(" \t");
 	// skip whitespace
-	auto tok_begin = std::find_if(
-		first,
-		last,
-		[](char c){
-			ASSERT(c != '\n');
-			ASSERT(c != '\0');
-			return c != ' ' or c != '\t';
-		}
+	const char* tok_begin = std::find_if(
+		str.begin(),
+		str.end(),
+		[](char c) { return c != ' ' and c != '\t'; }
 	);
 	// no token found
-	if(tok_begin == last) {
-		return {nullptr, 0u};
+	if(tok_begin == str.end()) {
+		return {};
 	}
+	// find next whitespace separator
 	auto tok_end = std::find_if(
 		tok_begin + 1,
-		last,
-		[](char c){
-			ASSERT(c != '\n');
-			ASSERT(c != '\0');
-			return c == ' ' or c == '\t';
-		}
+		str.end(),
+		[](char c) { return c == ' ' or c == '\t'; }
 	);
+	// return the token as a StringView
 	return {tok_begin, tok_end - tok_begin};
 }
 
 template <std::size_t N>
 [[nodiscard]]
-int tokenize_line(char* (&buff)[N], char* line, std::size_t line_size) {
-	ASSERT(line[line_size] == '\0');
+int tokenize_line(ino::StringView<> (&buff)[N], ino::StringView<> line) {
+	if(line.empty()) {
+		return 0u;
+	}
 	for(std::size_t i = 0u; i < N; ++i) {
-		if(line_size == 0u) {
-			return i;
-		}
-		auto [pos, len] = find_token(line, line + line_size);
-		if(not pos) {
+		// all done, no more data in the line
+		auto token = find_token(line);
+		// empty token implies the rest of the line is all whitespace.
+		if(token.empty()) {
 			return static_cast<int>(i);
 		}
-		buff[i] = pos;
-		line += len;
-		line_size -= len;
-		if(line_size == 0u) {
+		buff[i] = token;
+		// Remove the token from the front of the line.
+		line.remove_prefix(token.end() - line.begin());
+		if(line.empty()) {
 			return i + 1u;
 		}
-		*line++ = '\0';
-		--line_size;
 	}
 	// Too many tokens.
 	return -1;
@@ -65,27 +60,29 @@ int tokenize_line(char* (&buff)[N], char* line, std::size_t line_size) {
 template <std::size_t N>
 [[nodiscard]]
 signed long read_line(HardwareSerial& ser, char (&buff)[N]) {
+	// Read a line from the serial object into the buffer.
 	char* buffpos = buff;
 	char* const endpos = buff + N;
 	while(buffpos < endpos) {
-		int chr = ser.read();
-		while(chr == -1) {
+		int read_val = ser.read();
+		// Keep trying to read data from serial.
+		while(read_val == -1) {
 			// Manual devirtualization.
-			chr = ser.HardwareSerial::read();
+			read_val = ser.HardwareSerial::read();
 		}
+		char chr = static_cast<char>(read_val);
 		ASSERT(static_cast<char>(chr) != '\0');
+		// Encountered newline; all done.
 		if(static_cast<char>(chr) == '\n') {
+			// Write a null terminator and return.
 			*buffpos = '\0';
 			return buffpos - buff;
+		} else {
+			// Otherwise write the character and continue reading.
+			*buffpos++ = static_cast<char>(chr);
 		}
-		if(static_cast<char>(chr) == '\b') {
-			if(buffpos > buff) {
-				--buffpos;
-			}
-			continue;
-		}
-		*buffpos++ = static_cast<char>(chr);
 	}
+	// Too much data for the buffer.
 	return -1;
 }
 

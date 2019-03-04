@@ -3,7 +3,7 @@
 #include "Pins.h"
 #include "Command.h"
 #include "command_parsing.h"
-#include "checkengine.h"
+#include "commands/checkengine.h"
 
 
 void setup()
@@ -33,31 +33,25 @@ void setup()
 	attachInterrupt(0, ino::checkengine_interrupt, CHANGE);
 }
 
+// Buffer to read lines from serial into.
 static char line_buffer[128] = "";
-static char* token_buffer[10] = {nullptr};
+// Buffer to store tokens in when tokenizing lines.
+static ino::StringView<> token_buffer[10] = {{}};
 
-static int old_state = LOW;
 void loop()
 {
-	// int state = digitalRead(10);
-	// if(state != old_state) {
-	// 	
-	// } else {
-	// 	
-	// }
-	// ino::checkengine_interrupt();
 	Serial.print("ino> ");
 	auto line_length = ino::read_line(Serial, line_buffer);
 	if(line_length < 0) {
 		Serial.println("Error: Command too long.");
 		return;
 	}
-	int count = ino::tokenize_line(token_buffer, line_buffer, line_length);
+	int count = ino::tokenize_line(token_buffer, ino::StringView<>(line_buffer, line_length));
 	if(count < 0) {
 		Serial.println("Error: Too many tokens in command.");
 		return;
 	}
-	int err = ino::invoke_command(count, token_buffer);
+	int err = ino::invoke_command(ino::Span(token_buffer, count));
 }
 
 int main(void)

@@ -1,13 +1,15 @@
 #ifndef INO_CHECKENGINE_H
 #define INO_CHECKENGINE_H
+
 #include "Command.h"
+
 namespace ino {
 
 void checkengine_interrupt();
 
-int cmd_checkengine_status(int argc, char** argv);
+int cmd_checkengine_status(Span<StringView<>> argv);
 
-int cmd_checkengine_light(int argc, char** argv);
+int cmd_checkengine_light(Span<StringView<>> argv);
 
 template <>
 [[gnu::progmem]]

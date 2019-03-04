@@ -6,15 +6,75 @@
 #include <Arduino.h>
 #include <cstring>
 #include <algorithm>
-#include "stepper_control.h"
-#include "checkengine.h"
+
+// Command headers
+#include "commands/pinmode.h"
+#include "commands/digitalread.h"
+#include "commands/digitalwrite.h"
+#include "commands/analogread.h"
+#include "commands/analogwrite.h"
+#include "commands/headlights.h"
+#include "commands/checkengine.h"
+#include "commands/stepper_control.h"
+
 
 namespace ino {
+
+const CheckedPin* pin_from_name(StringView<> name) {
+	auto pos = std::find_if(
+		ino::all_pins.begin(),
+		ino::all_pins.end(),
+		[=](CheckedPin p) { return name == p.name(); }
+	);
+	if(pos == ino::all_pins.end()) {
+		return nullptr;
+	} else {
+		return &(*pos);
+	}
+}
+
+int commandargs_check(Span<StringView<>> argv, int min_args, int max_args) {
+	if(argv.size() < min_args) {
+		return command_error(
+			F("Command '"),
+			argv[0],
+			F("' expects at least "),
+			min_args - 1,
+			F(" arguments.")
+		);
+	}
+	max_args = max_args == -1 ? min_args : max_args;
+	if(argv.size() > max_args) {
+		return command_error(
+			F("Command '"),
+			argv[0],
+			F("' expects at most "),
+			max_args - 1,
+			F(" arguments.")
+		);
+	}
+	return 0;
+}
+
+const CheckedPin* pincommand_check(Span<StringView<>> argv, int min_args, int max_args) {
+	int err = commandargs_check(argv, min_args, max_args);
+	if(err != 0) {
+		return nullptr;
+	}
+	auto* pin = pin_from_name(argv[1]);
+	if(not pin) {
+		int err = command_error(F("Invalid pin name '"), argv[1], F("'."));
+		(void)err;
+		return nullptr;
+	}
+	return pin;
+}
+
 struct Command {
-	using command_type = int (*)(int, char**);
+	using command_type = int (*)(Span<StringView<>>);
 	using trait_getter_type = ino::FlashStringView<> (*)(const CommandTraitsBase&, CommandTrait);
 
-	constexpr Command() = default;
+	Command() = default;
 
 	constexpr ino::FlashStringView<> name() const {
 		return trait_getter_(*traits_, CommandTrait::Name);
@@ -29,12 +89,12 @@ struct Command {
 	}
 
 	[[nodiscard]]
-	constexpr int operator()(int argc, char** argv) const {
+	constexpr int operator()(Span<StringView<>> argv) const {
 		ASSERT(*this);
-		return command_(argc, argv);
+		return command_(argv);
 	}
 
-	template <int (*Cmd)(int, char**)>
+	template <int (*Cmd)(Span<StringView<>>)>
 	friend constexpr Command make_command();
 
 	constexpr operator bool() const {
@@ -43,7 +103,7 @@ struct Command {
 
 private:
 	constexpr Command(
-		int (*cmd)(int, char**),
+		int (*cmd)(Span<StringView<>>),
 		const CommandTraitsBase* traits,
 		trait_getter_type getter
 	):
@@ -54,12 +114,12 @@ private:
 		
 	}
 
-	int (*command_)(int, char**) = nullptr;
+	int (*command_)(Span<StringView<>>);
 	const CommandTraitsBase* traits_ = nullptr;
 	trait_getter_type trait_getter_ = nullptr;
 };
 
-template <int (*Cmd)(int, char**)>
+template <int (*Cmd)(Span<StringView<>>)>
 constexpr Command make_command() {
 	return Command(
 		Cmd,
@@ -68,222 +128,10 @@ constexpr Command make_command() {
 	);
 }
 
-template <int (*Cmd)(int, char**)>
+template <int (*Cmd)(Span<StringView<>>)>
 inline constexpr Command command = make_command<Cmd>();
 
-
-static const CheckedPin* pin_from_name(const char* name) {
-	auto pos = std::find_if(
-		&ino::all_pins[0],
-		&ino::all_pins[0] + ino::pin_count,
-		[=](CheckedPin p) { return std::strcmp(p.name(), name) == 0; }
-	);
-	if(pos == &ino::all_pins[0] + ino::pin_count) {
-		return nullptr;
-	} else {
-		return &(*pos);
-	}
-}
-
-static const int commandargs_check(int argc, char** argv, int min_args, int max_args = -1) {
-	if(argc < min_args) {
-		return command_error(
-			F("Command '"),
-			argv[0],
-			F("' expects at least "),
-			min_args - 1,
-			F(" arguments.")
-		);
-	}
-	max_args = max_args == -1 ? min_args : max_args;
-	if(argc > max_args) {
-		return command_error(
-			F("Command '"),
-			argv[0],
-			F("' expects at most "),
-			max_args - 1,
-			F(" arguments.")
-		);
-	}
-	return 0;
-}
-
-static const CheckedPin* pincommand_check(int argc, char** argv, int min_args, int max_args = -1) {
-	int err = commandargs_check(argc, argv, min_args, max_args);
-	if(err != 0) {
-		return nullptr;
-	}
-	auto* pin = pin_from_name(argv[1]);
-	if(not pin) {
-		int err = command_error(F("Invalid pin name '"), argv[1], "'.");
-		(void)err;
-		return nullptr;
-	}
-	return pin;
-}
-
-static int cmd_pinmode(int argc, char** argv) {
-	auto* pin = pincommand_check(argc, argv, 2, 3);
-	if(not pin) {
-		return -1;
-	}
-	if(argc == 2) {
-		switch(pin->mode()) {
-		case PinMode::Input:
-			Serial.println("INPUT");
-			break;
-		case PinMode::InputPullup:
-			Serial.println("INPUT_PULLUP");
-			break;
-		case PinMode::Output:
-			Serial.println("OUTPUT");
-			break;
-		}
-		return 0;
-	}
-	if(std::strcmp(argv[2], "INPUT") == 0 or std::strcmp(argv[2], "input") == 0) {
-		pin->set_mode(PinMode::Input);
-		return 0;
-	}
-	if(std::strcmp(argv[2], "OUTPUT") == 0 or std::strcmp(argv[2], "output") == 0) {
-		pin->set_mode(PinMode::Output);
-		return 0;
-	}
-	if(std::strcmp(argv[2], "INPUT_PULLUP") == 0 or std::strcmp(argv[2], "input_pullup") == 0) {
-		pin->set_mode(PinMode::InputPullup);
-		return 0;
-	}
-	return command_error(F("Invalid pin mode '"), argv[2], "'.");
-}
-
-static int cmd_digitalread(int argc, char** argv) {
-	auto* pin = pincommand_check(argc, argv, 2);
-	if(not pin) {
-		return -1;
-	}
-	switch(pin->digital_read()) {
-	case LogicLevel::Low:
-		Serial.println("0");
-		break;
-	case LogicLevel::High:
-		Serial.println("1");
-		break;
-	}
-	return 0;
-}
-
-static int cmd_digitalwrite(int argc, char** argv) {
-	const auto* pin = pincommand_check(argc, argv, 3);
-	if(not pin) {
-		return -1;
-	}
-	LogicLevel logic_level = LogicLevel::Low;
-	if(std::strcmp(argv[2], "low") == 0 or std::strcmp(argv[2], "LOW") == 0 or std::strcmp(argv[2], "0") == 0) {
-		logic_level = LogicLevel::Low;
-	} else if(std::strcmp(argv[2], "high") == 0 or std::strcmp(argv[2], "HIGH") == 0 or std::strcmp(argv[2], "1") == 0) {
-		logic_level = LogicLevel::High;
-	} else {
-		return command_error(F("Invalid logic level '"), argv[2], "'.");
-	}
-	auto err = pin->digital_write(logic_level);
-	if(err != PinStatus::Good) {
-		return command_error("Pin ", argv[1], F(" is not currently in OUTPUT mode."));
-	}
-	return 0;
-}
-
-static int cmd_analogread(int argc, char** argv) {
-	const auto* pin = pincommand_check(argc, argv, 2);
-	if(not pin) {
-		return -1;
-	}
-	auto result = pin->analog_read();
-	int val = result.first;
-	PinStatus status = result.second;
-	if(status == PinStatus::BadPinKind) {
-		return command_error("Pin ", argv[1], F(" is not an analog pin."));
-	} else if(status == PinStatus::BadPinMode) {
-		return command_error("Pin ", argv[1], F(" is not in INPUT or INPUT_PULLUP mode."));
-	} else if(status != PinStatus::Good) {
-		return command_error(F("Unable to read from pin "), argv[1], ".");
-	}
-	Serial.println(val);
-	return 0;
-}
-
-static int cmd_analogwrite(int argc, char** argv) {
-	const auto* pin = pincommand_check(argc, argv, 3);
-	if(not pin) {
-		return -1;
-	}
-	long value = std::strtol(argv[2], nullptr, 10);
-	if(value == 0 and argv[2][0] != '0') {
-		return command_error("Cannot parse '", argv[2], F("' as a decimal integer in analogwrite."));
-	}
-	PinStatus status = pin->analog_write(value);
-	switch(status) {
-	default:
-		return command_error("Unable to write to pin ", argv[1], ".");
-		break;
-	case PinStatus::BadAnalogWriteValue:
-		return command_error(
-			argv[2],
-			F(" is out-of-range for analogwrite (must be in the range ["),
-			CheckedPin::analog_write_minm,
-			", ",
-			CheckedPin::analog_write_maxm + 1,
-			") )."
-		);
-		break;
-	case PinStatus::BadPinKind:
-		return command_error("Pin ", argv[1], " is not PWM-enabled.");
-		break;
-	case PinStatus::BadPinMode:
-		return command_error("Pin ", argv[1], " is not in OUTPUT mode.");
-		break;
-	case PinStatus::Good:
-		break;
-	}
-	return 0;
-}
-
-static int cmd_headlights(int argc, char** argv) {
-	constexpr int8_t pin = 9;
-	pinMode(pin, OUTPUT);
-	switch(argc) {
-	default:
-		return command_error(F("Command 'headlights' takes at most 1 argument."));
-	case 2:
-		if(std::strcmp(argv[1], "ON") == 0 or std::strcmp(argv[1], "on") == 0) {
-			digitalWrite(pin, HIGH);
-		} else if(std::strcmp(argv[1], "OFF") or std::strcmp(argv[1], "off")) {
-			digitalWrite(pin, LOW);
-		} else {
-			return command_error(F("Expected one of 'on', 'ON', 'off', or 'OFF'."));
-		}
-		break;
-	case 1:
-		(void)0;
-	}
-	// Echo the current status of the pin.
-	if(digitalRead(9) == HIGH) {
-		Serial.println("ON");
-	} else {
-		Serial.println("OFF");
-	}
-	return 0;
-
-}
-
-static int cmd_help(int argc, char** argv);
-
-template <>
-[[gnu::progmem]]
-inline constexpr auto command_traits<cmd_headlights> = CommandTraits{
-	"headlights",
-	"headlights [ON/OFF]",
-	"Modify or query the state of the headlights."
-};
+static int cmd_help(Span<StringView<>>);
 
 template <>
 [[gnu::progmem]]
@@ -291,46 +139,6 @@ inline constexpr auto command_traits<cmd_help> = CommandTraits{
 	"help",
 	"help",
 	"Print this help menu."
-};
-
-template <>
-[[gnu::progmem]]
-inline constexpr auto command_traits<cmd_pinmode> = CommandTraits{
-	"pinmode",
-	"pinmode <pin> [mode]",
-	"Get or set the mode for the given pin."
-};
-
-template <>
-[[gnu::progmem]]
-inline constexpr auto command_traits<cmd_digitalread> = CommandTraits{
-	"digitalread",
-	"digitalread <pin>",
-	"Read whether the given pin is HIGH (1) or LOW (0)."
-};
-
-template <>
-[[gnu::progmem]]
-inline constexpr auto command_traits<cmd_digitalwrite> = CommandTraits{
-	"digitalwrite",
-	"digitalwrite <pin> <value>",
-	"Drive the given pin HIGH (1) or LOW (0)."
-};
-
-template <>
-[[gnu::progmem]]
-inline constexpr auto command_traits<cmd_analogread> = CommandTraits{
-	"analogread",
-	"analogread <pin>",
-	"Show the analog voltage reading in the range [0, 1024) for the pin."
-};
-
-template <>
-[[gnu::progmem]]
-inline constexpr auto command_traits<cmd_analogwrite> = CommandTraits{
-	"analogwrite",
-	"analogwrite <pin> <value>",
-	"Drive the given PWM pin with a pulse width in the range [0, 256)."
 };
 
 [[gnu::progmem]]
@@ -379,8 +187,7 @@ constexpr T accumulate(Iterator first, Iterator last, Acc acc, T init) {
 	return init;
 }
 
-static int cmd_help(int argc, char** argv) {
-
+static int cmd_help(Span<StringView<>>) {
 	// Get the maximum width of the command name, usage and description strings respectively.
 	struct Sizes {
 		std::size_t name_sz;
@@ -419,11 +226,11 @@ static int cmd_help(int argc, char** argv) {
 	return 0;
 }
 
-int invoke_command(int argc, char** argv) {
-	if(argc == 0) {
+int invoke_command(Span<StringView<>> argv) {
+	if(argv.size() == 0) {
+		// blank line
 		return 0;
 	}
-	ASSERT(argv[0]);
 	auto pos = std::find_if(
 		command_table.begin(),
 		command_table.end(),
@@ -433,7 +240,7 @@ int invoke_command(int argc, char** argv) {
 		return command_error("Unknown command '", argv[0], "'.");
 	} else {
 		Command command = *pos;
-		return command(argc, argv);
+		return command(argv);
 	}
 }
 

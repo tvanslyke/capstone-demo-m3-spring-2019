@@ -8,7 +8,7 @@ with serial.Serial(port='/dev/ttyUSB0', baudrate=115200, dsrdtr=False) as conn:
 	def write_output():
 		try:
 			while conn.isOpen():
-				sys.stdout.write(conn.read_all().decode("utf8"))
+				sys.stdout.write(conn.read_all().decode("utf8", errors="ignore"))
 		except OSError as e:
 			sys.stderr.write("Connection closed with error: '{}'\n".format(str(e)))
 

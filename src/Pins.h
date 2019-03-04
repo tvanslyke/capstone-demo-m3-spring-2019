@@ -26,18 +26,20 @@ enum class PinMode: int {
 	InputPullup = INPUT_PULLUP
 };
 
-enum class PinStatus: int {
-	Good                = 0,
-	Error               = -1,
-	BadPinMode          = -2,
-	BadPinKind          = -3,
-	BadAnalogWriteValue = -4
+enum class PinStatus {
+	Good,
+	BadPinMode,
+	BadPinKind,
+	BadAnalogWriteValue,
 };
 
+/**
+ * Encapsulates the 
+ */
 struct CheckedPin {
 
 	template <int Number>
-	[[gnu::warn_unused_result]]
+	[[nodiscard]]
 	static constexpr CheckedPin from_pin_number() noexcept {
 		static_assert(CheckedPin(Number).is_valid(), "Invalid pin number.");
 		return CheckedPin(Number);
@@ -49,12 +51,12 @@ struct CheckedPin {
 
 	constexpr CheckedPin() = delete;
 
-	[[gnu::warn_unused_result]]
+	[[nodiscard]]
 	constexpr int number() const {
 		return number_;
 	}
 
-	[[gnu::warn_unused_result]]
+	[[nodiscard]]
 	constexpr const char* name() const {
 		switch(number()) {
 		default:
@@ -83,7 +85,7 @@ struct CheckedPin {
 		}
 	}
 
-	[[gnu::warn_unused_result]]
+	[[nodiscard]]
 	constexpr PinKind kind() const {
 		switch(number()) {
 		default:  UNREACHABLE();
@@ -110,7 +112,7 @@ struct CheckedPin {
 		}
 	}
 
-	[[gnu::warn_unused_result]]
+	[[nodiscard]]
 	constexpr std::ptrdiff_t index() const {
 		switch(number()) {
 		default:
@@ -141,7 +143,7 @@ struct CheckedPin {
 		}
 	}
 
-	[[gnu::warn_unused_result]]
+	[[nodiscard]]
 	constexpr bool is_valid() const {
 		return index() >= 0 and index() <= A7;
 	}
@@ -164,7 +166,7 @@ struct CheckedPin {
 		pinMode(number(), static_cast<int>(mode));
 	}
 
-	[[gnu::warn_unused_result]]
+	[[nodiscard]]
 	PinMode mode() const {
 		if(pinmodes_[index()]) {
 			if(is_pullup_[index()]) {
@@ -176,7 +178,7 @@ struct CheckedPin {
 	}
 
 
-	[[gnu::warn_unused_result]]
+	[[nodiscard]]
 	LogicLevel digital_read() const {
 		int level = digitalRead(number());
 		if(level == HIGH) {
@@ -185,7 +187,7 @@ struct CheckedPin {
 		return LogicLevel::Low;
 	}
 
-	[[gnu::warn_unused_result]]
+	[[nodiscard]]
 	PinStatus digital_write(LogicLevel level) const {
 		if(mode() != PinMode::Output) {
 			return PinStatus::BadPinMode;
@@ -194,7 +196,7 @@ struct CheckedPin {
 		return PinStatus::Good;
 	}
 
-	[[gnu::warn_unused_result]]
+	[[nodiscard]]
 	std::pair<int, PinStatus> analog_read() const {
 		if(kind() != PinKind::Analog) {
 			return {-1, PinStatus::BadPinKind};
@@ -206,7 +208,7 @@ struct CheckedPin {
 		return {val, PinStatus::Good};
 	}
 
-	[[gnu::warn_unused_result]]
+	[[nodiscard]]
 	PinStatus analog_write(int value) const {
 		if(kind() != PinKind::DigitalPWM) {
 			return PinStatus::BadPinKind;
@@ -256,8 +258,6 @@ inline constexpr auto all_pins = ino::Array{
 	CheckedPin::from_pin_number<A4>(),
 	CheckedPin::from_pin_number<A5>()
 };
-
-inline constexpr std::size_t pin_count = sizeof(all_pins) / sizeof(all_pins[0]);
 
 template <int PinNumber>
 inline constexpr CheckedPin pin = CheckedPin::from_pin_number<PinNumber>();
